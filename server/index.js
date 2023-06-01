@@ -3,7 +3,8 @@
 require('dotenv').config();
 const { Server } = require('socket.io');
 const PORT = process.env.PORT || 3001;
-
+const Queue = require('./lib/queue');
+let messageQueue = new Queue(); 
 
 // Socket server singleton(sometimes called io)
 const server = new Server();
@@ -20,15 +21,48 @@ server.on('connection', (socket) => {
     console.log('SERVER: Message event', payload);
 
     // 3 ways to emit [Cheat sheet](https://socket.io/docs/v4/emit-cheatsheet/)
+    // TODO: step 1, store all messages in Queue
+    let currentQueue = messageQueue.read(payload.queueId);
+    // first time we run our server this queue wont exist, we need validation
+    if(!currentQueue){                  // key
+      let queueKey = messageQueue.store(payload.queueId, new Queue());
+      currentQueue = messageQueue.read(queueKey);
+    } 
 
-    // socket.emit('MESSAGE', payload); //Basic emit back to sender
-    // server.emit('MESSAGE', payload); //send to all clients connected to the server
+    // Now that we KNOW we have a current queue, lets store the incoming message
+    // Because that unique messageId is a string, Javascript will maintain order for us.
+    currentQueue.store(payload.messageId, payload);
+
     socket.broadcast.emit('MESSAGE', payload); // sends to all parties in the socket except for the sender
   });
   socket.on('RECEIVED', (payload) => {
     console.log('SERVER: Received event', payload);
+    // TODO: step 2, if the message is received, remove it from the queue
+    let currentQueue = messageQueue.read(payload.queueId);
+    if(!currentQueue){
+      throw new Error('We have messages, but no queue');
+    }
+    let message = currentQueue.remove(payload.queueId);
+
     // Note that No One is listening for this!
-    socket.broadcast.emit('RECEIVED', payload);
+    socket.broadcast.emit('RECEIVED', message);
+  });
+
+  // TODO: step 3, create an event called GET_MESSAGES that the recipient
+  // TODO: can emit so that they can get any missed messages
+
+  socket.on('GET-MESSAGES', (payload)=>{
+    console.log('Attempting to get messages');
+    let currentQueue = messageQueue.read(payload.queueId);
+    if(currentQueue && currentQueue.data){
+      // Getting a list of all messages
+      Object.keys(currentQueue.data).forEach(messageId =>{
+        // Sending saved messages that were missed by recipient
+        // Maybe sending to the correct room also works
+        socket.emit('MESSAGE', currentQueue.read(messageId));
+        // Once we emit then our code should receive the messages and remove them
+      });
+    }
   });
 });
 

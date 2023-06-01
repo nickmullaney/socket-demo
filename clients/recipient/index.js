@@ -2,6 +2,7 @@
 const { io } = require('socket.io-client');
 const socket = io('http://localhost:3001');
 
+socket.emit('GET-MESSAGE', {queueId: 'messages'});
 
 socket.on('MESSAGE', (payload) =>{
   setTimeout(() => {

@@ -5,7 +5,11 @@ const Chance = require('chance');
 let chance = new Chance();
 
 setInterval(() => {
-  let text = `Hello ${chance.first()}`;
-  console.log(`Messenger: Message sent ${text}`);
-  socket.emit('MESSAGE', { text });
+  let payload = {
+    text: `Hello ${chance.first()}`,
+    messageId: chance.guid(),
+    queueId: 'messages',
+  };
+  console.log(`Messenger: Message sent ${payload.text}`);
+  socket.emit('MESSAGE', payload);
 }, 5000);
